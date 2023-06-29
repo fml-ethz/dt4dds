@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+
+
+[project]
+name = "dt4dds"
+authors = [
+    {name = "Andreas Gimpel", email = "andreas.gimpel@chem.ethz.ch"},
+]
+description = "dt4dds is a Python package providing a customizable, digital representation of the widely-used DNA data storage workflow involving array synthesis, PCR, Aging, and Sequencing-By-Synthesis. By modelling each part of such user-defined workflows with fully customizable experimental parameters, dt4dds enables data-driven experimental design and rational design of redundancy. dt4dds also includes a pipeline for comprehensively analyzing errors in sequencing data, both from experiments and simulation."
+readme = 'README.md'
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python",
+    "Topic :: Scientific/Engineering :: Bio-Informatics"
+]
+dynamic = ["version"]
+dependencies = [
+  'numpy',
+  'scipy',
+  'pandas',
+  'edlib',
+  'biopython',
+  'numba',
+  'plotly',
+  'PyYAML',
+  'rapidfuzz',
+  'ruamel.yaml',
+  'tqdm',
+]
+
+
+[tool.setuptools]
+packages = ['dt4dds']
+
+
+[tool.setuptools.dynamic]
+version = {attr = "dt4dds.__VERSION__"}
+
+
+[project.urls]
+Homepage = "https://dt4dds.ethz.ch"
+Repository = "https://github.com/fml-ethz/dt4dds"

@@ -1,0 +1,57 @@
+# general
+method: 'fixed'
+fixed_decay_ratio: 0.5
+
+arrhenius_T: null
+arrhenius_t: null
+arrhenius_RH: null
+
+
+
+
+
+# error related
+substitution_rate: 0.000164
+substitution_bias: 
+  A:
+    C: 0.0250
+    G: 0.0176
+    T: 0.0078
+  C:
+    A: 0.0357
+    G: 0.0318
+    T: 0.3820
+  G:
+    A: 0.3820
+    C: 0.0318
+    T: 0.0357
+  T:
+    A: 0.0078
+    C: 0.0176
+    G: 0.0250
+substitution_length_bias: null
+substitution_length_bias_params: null
+
+insertion_rate: 0.0
+insertion_bias:
+  A: 0.25
+  C: 0.25
+  G: 0.25
+  T: 0.25
+insertion_length_bias: null
+insertion_length_bias_params: null
+
+    
+    
+deletion_rate: 0.0
+deletion_bias: 
+  A: 0.25
+  C: 0.25
+  G: 0.25
+  T: 0.25
+deletion_length_bias: null
+deletion_length_bias_params: null
+
+
+# technical parameters
+arrhenius_Ea: 155000
