@@ -1,0 +1,19 @@
+# general parameters
+local: true
+n_reads: 2000000
+n_workers: 4
+align_subsampling: 1.0
+
+# processing parameters
+cut_adapters: true
+readmetrics: true
+breakmetrics: true
+map_local: false
+
+# categorization parameters
+min_match_similarity: 0.7
+medium_match_similarity: 0.7
+min_align_length: 10
+trim_ends: 
+  - C
+  - T

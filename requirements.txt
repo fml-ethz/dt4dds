@@ -9,3 +9,7 @@ PyYAML
 rapidfuzz
 ruamel.yaml
 tqdm
+rich
+configargparse
+pysam
+seqfold

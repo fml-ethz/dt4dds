@@ -2,8 +2,6 @@ import dt4dds
 
 # set up config
 dt4dds.default_logging()
-dt4dds.config.enable_multiprocessing = False
-dt4dds.config.n_processes = 1
 dt4dds.config.show_progressbars = True
 
 

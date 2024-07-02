@@ -2,8 +2,6 @@ import dt4dds
 
 # set up config
 dt4dds.default_logging()
-dt4dds.config.enable_multiprocessing = False
-dt4dds.config.n_processes = 1
 dt4dds.config.show_progressbars = True
 
 
@@ -47,9 +45,7 @@ pool.volume = 1
 # Aging for one half-live
 # 
 aging_settings = dt4dds.settings.defaults.Aging()
-aging = dt4dds.processes.Aging(aging_settings(
-    fixed_decay_ratio=0.5,
-))
+aging = dt4dds.processes.Aging(aging_settings(), n_halflives=1)
 pool = aging.process(pool)
 pool.volume = 1
 

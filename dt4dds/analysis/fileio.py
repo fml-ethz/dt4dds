@@ -1,69 +1,52 @@
 from dataclasses import dataclass
 import random
-import mimetypes
+import pysam
 import functools
-import gzip
 import Bio.SeqIO
-import pandas as pd
-import numpy as np
+import multiprocessing
 import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 from . import mapping
+from . import config
+
+def read_generator(bam_file):
+    logger.info(f"Using input file {bam_file} for read generation.")
+    with pysam.AlignmentFile(bam_file, "rb", threads=config.n_workers) as bamfile:
+        for read in bamfile.fetch(until_eof=True):
+            if read.is_mapped:
+                ref_id = bamfile.get_reference_name(read.reference_id)
+                yield read, ref_id
 
 
-def reservoir_sampler(iterable, n):
-    reservoir = []
-    for t, item in enumerate(iterable):
-        if t < n:
-            reservoir.append(item)
-        else:
-            m = random.randint(0, t)
-            if m < n:
-                reservoir[m] = item
-    logger.info(f"Reservoir sampler sampled {len(reservoir)} items.")
-    return reservoir
+def reservoir_sampler(bam_file, n):
+    logger.info(f"Reading input file {bam_file} to determine total number of reads.")
+    total_reads = int(pysam.view('-c', str(bam_file)).strip("\n"))
+    selected_reads = set(random.sample(range(total_reads), min(n, total_reads)))
+    logger.info(f"Randomly selecting {len(selected_reads)} reads from {total_reads} total reads.")
+
+    max_seq = max(selected_reads)
+    for i, record in enumerate(read_generator(bam_file)):
+        if not i % (total_reads//5):
+            logger.info(f"Read {i}/{total_reads} ({100*i/total_reads:.1f}%) reads.")
+        if i in selected_reads:
+            yield record
+        if i == max_seq:
+            break
 
 
-def initial_sampler(iterable, n):
-    reservoir = []
-    for t, item in enumerate(iterable):
-        if t < n:
-            reservoir.append(item)
+def initial_sampler(bam_file, n):
+    logger.warning(f"Selecting only the first {n} reads from all reads.")
+    for record in read_generator(bam_file):
+        if n:
+            n -= 1
+            yield record
         else:
             break
-    logger.info(f"Initial sampler sampled {len(reservoir)} items.")
-    return reservoir
 
 
-
-
-
-def single_read_generator(input_file):
-    logger.info(f"Single reads are being generated from {input_file}.")
-    encoding = mimetypes.guess_type(input_file)[1]  # uses file extension
-    open_call = functools.partial(gzip.open, input_file, mode='rt') if encoding == 'gzip' else functools.partial(open, input_file, mode='r')
-
-    with open_call() as f:
-        for record in Bio.SeqIO.parse(f, 'fastq'):
-            yield record
-
-
-def paired_read_generator(input_file_fw, input_file_rv):
-    logger.info(f"Paired reads are being generated from {input_file_fw} (fw) and {input_file_rv} (rv).")
-    open_calls = []
-    for input_file in (input_file_fw, input_file_rv):
-        encoding = mimetypes.guess_type(input_file)[1] #uses file extension
-        open_calls.append(
-            functools.partial(gzip.open, input_file, mode='rt') if encoding == 'gzip' 
-            else functools.partial(open, input_file, mode='r')
-        )
-
-    with open_calls[0]() as f_fw, open_calls[1]() as f_rv:
-            for record_fw, record_rv in zip(Bio.SeqIO.parse(f_fw, 'fastq'), Bio.SeqIO.parse(f_rv, 'fastq')):
-                yield (record_fw, record_rv)
 
 
 
@@ -74,7 +57,7 @@ def read_reference(input_file):
         for record in Bio.SeqIO.parse(f, 'fasta'):
             d[record.id] = record
 
-    logger.info(f"Generated reference sequences from {input_file}.")
+    logger.info(f"Generated {len(d)} reference sequences from {input_file}.")
     return d
 
 
@@ -83,7 +66,7 @@ def reverse_complement_references(reference_dict):
     for id, ref in reference_dict.items():
         d[id] = ref[:]
         d[id].seq = ref.seq.reverse_complement()
-    logger.info(f"Reverse complemented the reference sequences.")
+    logger.info(f"Reverse complemented the {len(d)} reference sequences.")
     return d
 
 
@@ -104,121 +87,113 @@ def ensure_no_duplicate_references(reference_dict):
 
 
 
-def _save_error_stats(mappings, output_files, paired=False):
 
-    if not mappings:
-        logger.info(f"No data to write to error stats {', '.join(output_files)}.")
+
+
+
+def _sum_stats(mappings_list):
+    stats = [mapping.ErrorMap(), mapping.ErrorMap()]
+
+    if config.categorize_by_direction:
+        categorize = lambda x: x.read_direction-1
+    else:
+        categorize = lambda x: x.read_number-1
+
+    for map in mappings_list:
+        stats[categorize(map)] += mapping.ErrorMap.from_mapping(map)
+    
+    return stats
+
+
+
+
+
+def _save_error_stats(mappings_list, output_files):
+
+    if not mappings_list:
+        logger.info(f"No data to write to error stats {mappings_list}.")
         return
+    
+    n_per_worker = -(-len(mappings_list) // config.n_workers)
+    separated_mappings = [mappings_list[i:i+n_per_worker] for i in range(0, len(mappings_list), n_per_worker)]
 
-    stats = [mapping.ErrorMap() for _ in output_files]
+    with multiprocessing.Pool(config.n_workers) as pool:
+        results = pool.map(_sum_stats, separated_mappings)
 
-    for map in mappings:
-        if paired:
-            for imap in map:
-                stats[imap.read_number-1] += mapping.ErrorMap.from_mapping(imap)
-        else:
-            stats[map.read_number-1] += mapping.ErrorMap.from_mapping(map)
+    stats = results[0]
+    for res in results[1:]:
+        stats[0] += res[0]
+        stats[1] += res[1]
 
     for i, file in enumerate(output_files):
         stats[i].save(file)
 
-    logger.info(f"Wrote error statistics to files {', '.join(output_files)}.")
+    logger.info(f"Wrote error statistics to files {', '.join([str(x) for x in output_files])}.")
 
 
 
-def _save_error_maps(mappings, output_files, limit=10000, paired=False):
+def _save_error_maps(mappings_list, output_files, limit=1000):
 
-    if not mappings:
-        logger.info(f"No data to write to error maps {', '.join(output_files)}.")
+    if not mappings_list:
+        logger.info(f"No data to write to error maps {', '.join([str(x) for x in output_files])}.")
         return
+    
+    
+    if config.categorize_by_direction:
+        categorize = lambda x: x.read_direction-1
+    else:
+        categorize = lambda x: x.read_number-1
 
     fhs = [open(file, "w") for file in output_files]
-
-    for i, map in enumerate(mappings):
-        if paired:
-            for imap in map:
-                fhs[imap.read_number-1].write(imap.to_comparison_string())
-        else:
-            fhs[map.read_number-1].write(map.to_comparison_string())
-
-        if limit and i == limit:
-            break
+    written = [0, 0]
+    for map in mappings_list:
+        if written[categorize(map)] < limit:
+            fhs[categorize(map)].write(map.to_comparison_string())
+            written[categorize(map)] += 1
     
-    logger.info(f"Wrote error maps to files {', '.join(output_files)}, with a limit of {limit}.")
+    logger.info(f"Wrote error maps to files {', '.join([str(x) for x in output_files])}, with a limit of {limit}.")
 
 
 
 
-def save_results(mappings_dict, output_files, map_limit=10000, paired=False):
+def save_results(folderpath, mappings_dict):
 
     mapping_files_args = []
     stat_files_args = []
-    paired_addendum = ".paired" if paired else ""
+    mode = 'local' if config.local else 'global'
 
-    mappings_files_suffix = "errormap"
     for name, mappings in mappings_dict.items():
-        mapping_files_args.append(
-            (
-                mappings, 
-                [f"{file}{paired_addendum}.{name}.{mappings_files_suffix}" for file in output_files],
-            )
-        )
+        mapping_files_args.append((
+            mappings, 
+            [folderpath / f"{d}.{mode}.{name}.{config.errormap_suffix}" for d in ('fw', 'rv')],
+        ))
+        stat_files_args.append((
+            mappings, 
+            [folderpath / f"{d}.{mode}.{name}.{config.stats_suffix}" for d in ('fw', 'rv')],
+        ))
 
-    stats_files_suffix = "stats"
-    for name, mappings in mappings_dict.items():
-        stat_files_args.append(
-            (
-                mappings, 
-                [f"{file}{paired_addendum}.{name}.{stats_files_suffix}" for file in output_files],
-            )
-        )
-
-    mapping_files_fun = functools.partial(_save_error_maps, **{'limit': map_limit, 'paired': paired})
-    stats_files_fun = functools.partial(_save_error_stats, **{'paired': paired})
+    mapping_files_fun = functools.partial(_save_error_maps, **{'limit': config.mapping_limit})
+    stats_files_fun = functools.partial(_save_error_stats)
 
     for map_args, stat_args in zip(mapping_files_args, stat_files_args):
         mapping_files_fun(*map_args)
         stats_files_fun(*stat_args)
 
 
-def _save_seqerror_matrix(mappings_dict, output_file):
 
-    stats_by_sequence = {}
-    for refid, list_of_maps in mappings_dict.items():
-        if list_of_maps: 
-            stats = mapping.ErrorMap()
-            for map in list_of_maps:
-                stats += mapping.ErrorMap.from_mapping(map)
-            stats_by_sequence[refid] = stats
-
-    # compile overall error rates
-    dataframes_by_parameter = {'n_reads': [], 'n_bases': [], 'n_substitutions': [], 'n_deletions': [], 'n_insertions': []}
-
-    for refid, stats in stats_by_sequence.items():
-        for parameter in dataframes_by_parameter.keys():
-            dataframes_by_parameter[parameter].append(getattr(stats, parameter))
+def save_metrics(folderpath, mappings_dict, function_name, suffix):
+    mode = 'local' if config.local else 'global'
+    with open(folderpath / f'{mode}.{suffix}', "w") as f: 
+        # extract the necessary columns from the keys of the first element
+        columns = list(getattr(next(iter(mappings_dict.values()))[0], function_name).keys())
+        columns.append('category')
+        f.write(','.join(columns) + '\n')
         
-    df = pd.DataFrame(dataframes_by_parameter, index=list(stats_by_sequence.keys()))
-    df.to_csv(f"{output_file}.overview_by_sequence.csv", index_label="refid")
+        # loop through all mappings and compile the metrics
+        for name, maps in mappings_dict.items():
+            for read in maps:
+                metrics = list(getattr(read, function_name).values())
+                metrics.append(name)
+                f.write(f"{','.join([str(x) for x in metrics])}\n")
 
-
-    # compile error rate by position
-    dataframes_by_error = {'substitutions': [], 'deletions': [], 'insertions': []}
-
-    # collect per-seq stats
-    for refid, stats in stats_by_sequence.items():
-        for errortype in dataframes_by_error.keys():
-            df = pd.DataFrame.from_dict(getattr(stats, f"n_{errortype}_by_refposition"), orient="index", columns=[refid])
-            df[refid] /= stats.n_reads
-            dataframes_by_error[errortype].append(df)
-
-    # compile into one dataframe
-    for errortype, dfs in dataframes_by_error.items():
-        all_df = pd.DataFrame().join(dfs, how='outer', sort=True)  
-        all_df.fillna(0, inplace=True)
-        all_df.T.to_csv(f"{output_file}.{errortype}_by_sequence.csv", index_label="refid")
-
-
-def save_seqerror_matrix(mappings, output_files):
-    for m, f in zip(mappings, output_files):
-        _save_seqerror_matrix(m, f)
+    logger.info(f"Wrote {function_name} to file {folderpath / f'{mode}.{suffix}'}.")

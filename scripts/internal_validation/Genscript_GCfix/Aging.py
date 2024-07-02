@@ -6,8 +6,6 @@ import sys
 TARGET_FOLDER = sys.argv[1]
 
 dt4dds.config.show_progressbars = False
-dt4dds.config.enable_multiprocessing = False
-dt4dds.config.n_processes = 4
 dt4dds.default_logging()
 
 
@@ -135,7 +133,7 @@ gc.collect()
 ipool = pool.sample_by_mass(30)
 
 # aging
-aging = dt4dds.processes.Aging(dt4dds.settings.defaults.Aging(fixed_decay_ratio=1-0.0832))
+aging = dt4dds.processes.Aging(dt4dds.settings.defaults.Aging(), decayed_ratio=1-0.0832)
 ipool = aging.process(ipool)
 
 # post-aging dilution
@@ -162,7 +160,7 @@ gc.collect()
 ipool = pool.sample_by_mass(30)
 
 # aging
-aging = dt4dds.processes.Aging(dt4dds.settings.defaults.Aging(fixed_decay_ratio=1-0.0272))
+aging = dt4dds.processes.Aging(dt4dds.settings.defaults.Aging(), decayed_ratio=1-0.0272)
 ipool = aging.process(ipool)
 
 # post-aging dilution
@@ -189,7 +187,7 @@ gc.collect()
 ipool = pool.sample_by_mass(30)
 
 # aging
-aging = dt4dds.processes.Aging(dt4dds.settings.defaults.Aging(fixed_decay_ratio=1-0.00942))
+aging = dt4dds.processes.Aging(dt4dds.settings.defaults.Aging(), decayed_ratio=1-0.00942)
 ipool = aging.process(ipool)
 
 # no post-aging dilution

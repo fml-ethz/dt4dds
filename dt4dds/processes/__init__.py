@@ -1,5 +1,4 @@
-from .dilution import FixedMassConcentrationDilution, FixedMolarConcentrationDilution, FixedVolumeDilution
-from .purification import SizePurification, StandardPurification
+from .preparation import BeadCleanup, AdapterLigation, ssAdapterLigation, dsAdapterLigation
 from .aging import Aging
 from .array_synthesis import ArraySynthesis
 from .pcr import PCR

@@ -22,14 +22,14 @@ class AmplificationEfficiency():
         if not hasattr(tools.rng, cls._settings.efficiency_distribution):
             raise NotImplementedError(f"A distribution called {cls._settings.efficiency_distribution} is not implemented.")
 
-        return getattr(tools.rng, cls._settings.efficiency_distribution)(**cls._settings.efficiency_params)
+        return getattr(tools.rng, cls._settings.efficiency_distribution)(**cls._settings.efficiency_params, size=size)
 
 
     @classmethod
     def get_efficiencies(cls, sequences):
         """  """
         # get efficiencies for known oligos
-        efficiencies = np.array([cls._efficiency_cache.get(seq, np.nan) for seq in sequences])
+        efficiencies = np.array([cls._efficiency_cache.get(str(seq), np.nan) for seq in sequences])
 
         # create new efficiencies for unknown oligos
         missing_mask = np.isnan(efficiencies)
@@ -44,7 +44,7 @@ class AmplificationEfficiency():
         efficiencies[missing_mask] = cls._efficiency_distribution(np.count_nonzero(missing_mask))
 
         for ix in missing_mask.nonzero()[0]:
-            cls._efficiency_cache[sequences[ix]] = efficiencies[ix]
+            cls._efficiency_cache[str(sequences[ix])] = efficiencies[ix]
 
         return efficiencies
 
@@ -53,20 +53,34 @@ class AmplificationEfficiency():
     def get_efficiency(cls, sequence):
         """  """
         if sequence not in cls._efficiency_cache.keys():
-            cls._efficiency_cache[sequence] = cls._efficiency_distribution(1)
+            cls._efficiency_cache[str(sequence)] = cls._efficiency_distribution(1)[0]
         
-        return cls._efficiency_cache[sequence]
+        return cls._efficiency_cache[str(sequence)]
 
     
     @classmethod
     def duplicate_efficiencies(cls, from_sequence, to_sequences):
         """  """
         # get efficiency for original sequence
-        efficiency = cls.get_efficiency(from_sequence)
+        efficiency = cls.get_efficiency(str(from_sequence))
 
         # create identical efficiency for other oligos
         for seq in to_sequences:
-            cls._efficiency_cache[seq] = efficiency
+            cls._efficiency_cache[str(seq)] = efficiency
+
+    
+    @classmethod
+    def overwrite_sequence(cls, from_sequence, to_sequence):
+        """  """
+        # get efficiency for original sequence
+        efficiency = cls.get_efficiency(str(from_sequence))
+
+        # create identical efficiency for new sequence
+        cls._efficiency_cache[str(to_sequence)] = efficiency
+
+        # delete old sequence
+        del cls._efficiency_cache[str(from_sequence)]
+
 
 
 

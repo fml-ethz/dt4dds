@@ -1,0 +1,52 @@
+# error related
+substitution_rate: 0.000164
+substitution_bias: 
+  A:
+    C: 0.0250
+    G: 0.0176
+    T: 0.0078
+  C:
+    A: 0.0357
+    G: 0.0318
+    T: 0.3820
+  G:
+    A: 0.3820
+    C: 0.0318
+    T: 0.0357
+  T:
+    A: 0.0078
+    C: 0.0176
+    G: 0.0250
+substitution_read_bias: null
+substitution_repeat_bias: null
+substitution_length_bias: null
+
+
+insertion_rate: 0.0
+insertion_bias:
+  A: 0.25
+  C: 0.25
+  G: 0.25
+  T: 0.25
+insertion_read_bias: null
+insertion_repeat_bias: null
+insertion_length_bias: null
+
+    
+deletion_rate: 0.0
+deletion_bias: 
+  A: 0.25
+  C: 0.25
+  G: 0.25
+  T: 0.25
+deletion_read_bias: null
+deletion_repeat_bias: null
+deletion_length_bias: null
+
+
+# breakage-related
+breakage_base_probabilities: 
+  A: 0.3902
+  C: 0.0488
+  G: 0.4878
+  T: 0.0732

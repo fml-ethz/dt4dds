@@ -92,10 +92,8 @@ def run_experiments(synthesis_settings, fidelity, folder):
         ipool.volume = 1
 
         aging = dt4dds.processes.Aging(
-            dt4dds.settings.defaults.Aging(
-                fixed_decay_ratio=0.5,
-                substitution_rate=0.0,
-            )
+            dt4dds.settings.defaults.Aging(substitution_rate=0.0),
+            n_halflives=1,
         )
         ipool = aging.process(ipool)
         ipool.volume = 1

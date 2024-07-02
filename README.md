@@ -9,11 +9,19 @@
 
 
 # Overview
-`dt4dds` is a Python package  providing a customizable, digital representation of the widely-used DNA data storage workflow involving array synthesis, PCR, Aging, and Sequencing-By-Synthesis. By modelling each part of such user-defined workflows with fully customizable experimental parameters, `dt4dds` enables data-driven experimental design and rational design of redundancy. `dt4dds` also includes a pipeline for comprehensively analyzing errors in sequencing data, both from experiments and simulation. This Python package is used in the following publication:
-> Andreas L. Gimpel, Wendelin J. Stark, Reinhard Heckel, Robert N. Grass. Experimental quantification of errors and biases in DNA data storage for a digital twin. Manuscript in preparation.
+`dt4dds` is a Python package  providing a customizable, digital representation of the widely-used DNA data storage workflow involving array synthesis, PCR, Aging, and Sequencing-By-Synthesis. By modelling each part of such user-defined workflows with fully customizable experimental parameters, `dt4dds` enables data-driven experimental design and rational design of redundancy. `dt4dds` also includes a pipeline for comprehensively analyzing errors in sequencing data, both from experiments and simulation. This Python package is used in the following publications:
 
+> Gimpel, A.L., Stark, W.J., Heckel, R., Grass R.N. A digital twin for DNA data storage based on comprehensive quantification of errors and biases. Nat Commun 14, 6026 (2023). https://doi.org/10.1038/s41467-023-41729-1
+
+> Gimpel, A.L., Stark, W.J., Heckel, R., Grass R.N. Challenges for error-correction coding in DNA data storage: photolithographic synthesis and DNA decay. bioRxiv 2024.07.04.602085 (2024). https://doi.org/10.1101/2024.07.04.602085
 
 The Jupyter notebooks and associated code used for generating the figures in the manuscript are found in the [dt4dds_notebooks repository](https://github.com/fml-ethz/dt4dds_notebooks).
+
+## New: Challenges for DNA Data Storage
+
+A C++ implementation of the Digital Twin for DNA Data Storage for two current challenges in error-correction coding for DNA - Photolithographic DNA Synthesis and DNA Decay - is available [in this GitHub repository](https://github.com/fml-ethz/dt4dds-challenges). More information is also provided in the following publication:
+
+> Gimpel, A.L., Stark, W.J., Heckel, R., Grass R.N. Challenges for error-correction coding in DNA data storage: photolithographic synthesis and DNA decay. bioRxiv 2024.07.04.602085 (2024). https://doi.org/10.1101/2024.07.04.602085
 
 
 # Web-based Tool
@@ -25,21 +33,7 @@ A web-based version of `dt4dds` with an easy-to-use graphical user interface and
 This package only requires a standard computer. Depending on the size and complexity of the simulated workflows, sufficient RAM to support the in-memory operations is required. The required amount of RAM can be reduced by decreasing the number of cores used for parallelization (see config below), at the cost of increased run time.
 
 ## Software requirements
-This package is compatible with Windows, macOS and Linux. The package has been developed and tested on Ubuntu 20.04 using Python 3.10. The following Python packages are required: 
-```
-numpy
-scipy
-pandas
-biopython
-edlib
-numba
-plotly
-PyYAML
-rapidfuzz
-ruamel.yaml
-tqdm
-```
-For the analysis pipeline, BBMap (v38.99) is required and assumed to be installed in `~/.local/bin/`.
+This package is compatible with Windows, macOS and Linux. The package has been developed and tested on Ubuntu 20.04 using Python 3.10. The Python packages listed in [requirements.txt](/requirements.txt) are required.
 
 
 # Installation guide
@@ -85,9 +79,6 @@ import dt4dds
 At this point, you can set custom configuration options and enable logging, if desired:
 ```python
 dt4dds.default_logging()                    # enable logging output
-
-dt4dds.config.enable_multiprocessing = True # enable parallelization
-dt4dds.config.n_processes = 2               # limit the number of parallel processes to 2
 ```
 For the full documentation of configuration options, refer to [config.py](dt4dds/helpers/config.py).
 
@@ -156,7 +147,7 @@ For the full documentation of methods, refer to [pcr.py](dt4dds/processes/pcr.py
 The `dt4dds.processes.Aging()` class models decay for a user-defined number of half-lives. It requires a `SeqPool` as input, and yields a `SeqPool` representative of the decayed oligo pool by invocation of its `process()` method:
 ```python
 # set up aging for one half-life, add further non-default parameters as arguments if desired
-aging = dt4dds.processes.Aging(fixed_decay_ratio=0.5)
+aging = dt4dds.processes.Aging(n_halflives=1)
 
 # perform aging and receive the oligo pool representation after decay
 post_decay_pool = aging.process(pool)
@@ -203,38 +194,6 @@ For documentation of all defaults, refer to [defaults.py](dt4dds/settings/defaul
 
 ### Documentation of all parameters
 For documentation of all settings, refer to [settings.py](dt4dds/settings/settings.py).
-
-
-
-## Analysing errors and biases
-
-The pipeline for analysing errors and biases is provided in the `dt4dds.analysis` module. The convenience functions, provided as a command-line interface in [runner.py](dt4dds/bin/runner.py) and described below, require the sequencing datasets as gzipped FASTQ (i.e., `R1.fq.gz` and `R2.fq.gz`) and the reference sequences as a FASTA-formatted file (i.e., `design_files.fasta`) in a common directory.
-
-
-### Characterising errors
-To characterize the errors present in a single- or paired-read sequencing dataset in gzipped FASTQ format, the three convenience methods in [runner.py](dt4dds/bin/runner.py) can be used:
-```bash
-# analyse 100000 paired reads
-python3 runner.py paired <path/to/folder/> -n 100000
-
-# analyse 100000 single reads
-python3 runner.py single <path/to/folder/> -n 100000
-
-# analyse 100000 PhiX reads
-python3 runner.py phix <path/to/folder/> -n 100000
-```
-In all cases, the scripts deposit the analysis results in the same folder, stratified by similarity group. The remaining command line arguments are described in [runner.py](dt4dds/bin/runner.py).
-
-### Quantifying coverage
-To generate coverage data for a single- or paired-read sequencing dataset, the two BBMMap-based convenience methods in [runner.py](dt4dds/bin/runner.py) can be used:
-```bash
-# analyse coverage of paired reads
-python3 runner.py scafstats_paired <path/to/folder/>
-
-# analyse coverage of single reads
-python3 runner.py scafstats_single <path/to/folder/>
-```
-In both cases, the scripts deposit the analysis results in the same folder, in the `scafstats.txt` file. 
 
 
 # License

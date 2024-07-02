@@ -1,11 +1,3 @@
-# efficiency related
-efficiency_mean: 0.9
-
-
-# PCR cycles 
-n_cycles: 40
-
-
 # polymerase-related
 polymerase_basesubstitutionrate: 1.09e-4
 polymerase_fidelity: 0.3
@@ -26,12 +18,3 @@ polymerase_substitutionbias: # from 10.1371/journal.pone.0169774
     A: 0.09
     C: 0.085
     G: 0.0205
-
-
-# PCR mix
-template_volume: 5
-volume: 20
-
-
-# technical
-primer_minoverlap: 10

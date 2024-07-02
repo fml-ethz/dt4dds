@@ -6,19 +6,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-enable_multiprocessing = True
-""" Whether to enable multiprocessing for speed up. Warning: RNG becomes non-reproducible. """
-
-n_processes = 4
-""" Number of processes to spawn if multiprocessing is used. """
-
 show_progressbars = False
 """ Whether to show progress bars for time-consuming operations in the console. """
 
 error_generation_max_coverage_threshold = 10000
 """ Maximum threshold coverage (oligos/sequence) to which simulation is limited and result is instead scaled-up. """
 
-error_generation_error_coverage = 10
+error_generation_error_coverage = 5
 """ Average number of mutated oligos of one sequence to simulate for any error type. Scales with error rate to determine coverage threshold. """
 
 seqpool_maximum_pool_diversity = 1e7
@@ -31,4 +25,3 @@ multiprocessing_sequences_batch_size = 10000
 def set_random_seed(seed):
     """  """
     tools.rng = np.random.default_rng(np.random.SFC64(seed))
-    if enable_multiprocessing: logger.warning("Multiprocessing is enabled. RNG is non-reproducible even with a set seed.")

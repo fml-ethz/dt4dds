@@ -1,0 +1,58 @@
+# oligo number distribution
+oligo_distribution_type: lognormal
+oligo_distribution_params:
+  mean: 0
+  sigma: 0.44
+
+
+# length distribution
+length_distribution: [0.4882, 0.1189, 0.0635, 0.0342, 0.0202, 0.0137, 0.0117 , 0.0110 , 0.0096 , 0.0091]
+length_distribution_location: 'even'
+
+
+# deletions
+deletion_rate: 0.0683
+deletion_bias:
+  A: 0.25
+  C: 0.25
+  G: 0.25
+  T: 0.25
+deletion_read_bias: null
+deletion_repeat_bias: [0.8556, 0.1026, 0.0227, 0.0191]
+deletion_length_bias: null
+
+
+# insertions
+insertion_rate: 0.0136
+insertion_bias:
+  A: 0.25
+  C: 0.25
+  G: 0.25
+  T: 0.25
+insertion_read_bias: null
+insertion_repeat_bias: [0.9275, 0.0453, 0.0126, 0.0146]
+insertion_length_bias: null
+
+
+# substitutions
+substitution_rate: 0.0212
+substitution_bias:
+  A:
+    C: 0.085
+    G: 0.058
+    T: 0.063
+  C:
+    A: 0.088
+    G: 0.081
+    T: 0.063
+  G:
+    A: 0.095
+    C: 0.073
+    T: 0.183
+  T:
+    A: 0.081
+    C: 0.063
+    G: 0.094
+substitution_read_bias: null
+substitution_repeat_bias: [0.8420, 0.1277, 0.0232, 0.0071]
+substitution_length_bias: null

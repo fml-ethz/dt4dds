@@ -1,18 +1,23 @@
-import numpy as np
-
 from ..helpers import tools
 
 import logging
 logger = logging.getLogger(__name__)
 
+# https://bioinformatics.stackexchange.com/questions/3583/what-is-the-fastest-way-to-get-the-reverse-complement-of-a-dna-sequence-in-pytho
+tab = str.maketrans("ACTG", "TGAC")
+
 
 class Seq():
 
-    __slots__ = ("sequence")
+    __slots__ = ("sequence", "damaged_3prime")
 
-
-    def __init__(self, seq, normalized=False) -> None:
-        self.sequence = seq if normalized else tools.standardize_seq(seq)
+    def __init__(self, seq) -> None:
+        if seq[-1] == "_":
+            seq = seq[:-1]
+            self.damaged_3prime = True
+        else:
+            self.damaged_3prime = False
+        self.sequence = str(seq)
 
 
     def __len__(self):
@@ -20,11 +25,11 @@ class Seq():
 
     
     def __hash__(self):
-        return hash(self.sequence)
+        return hash(self.sequence) + int(self.damaged_3prime)
 
 
     def __eq__(self, other):
-        return self.sequence == str(other)
+        return str(self) == str(other)
 
 
     def __contains__(self, item):
@@ -36,7 +41,10 @@ class Seq():
 
 
     def __str__(self):
-        return self.sequence
+        if self.damaged_3prime:
+            return str(self.sequence) + "_"
+        else:
+            return str(self.sequence)
 
 
     def __iter__(self):
@@ -50,62 +58,21 @@ class Seq():
             return self.sequence[key]
         else:
             # Return subsequence as Seq instance
-            return Seq(self.sequence[key], normalized=True)
+            return Seq(self.sequence[key])
 
 
     def __add__(self, other):
-        return Seq(self.sequence + str(other), normalized=True)
+        return Seq(self.sequence + str(other))
 
 
     def __radd__(self, other):
-        return Seq(str(other) + self.sequence, normalized=True)
+        return Seq(str(other) + self.sequence)
 
 
     def copy(self):
         """ Returns a copy of this sequence. """
-        return Seq(self.sequence, normalized=True)
-
-
-    def replace(self, from_base, to_base):
-        self.sequence = self.sequence.replace(from_base, to_base)
+        return Seq(str(self))
     
-
-    def substitution(self, events):
-        """"""
-        sequence = self.sequence
-        for index, new_base in events:
-            sequence = sequence[0:index] + tools.BASES[new_base] + sequence[index+1:]
-        return Seq(sequence, normalized=True)
-
-
-    def insertion(self, events):
-        """"""
-        sequence = self.sequence
-        for index, new_base in events:
-            sequence = sequence[0:index+1] + tools.BASES[new_base] + sequence[index+1:]
-        return Seq(sequence, normalized=True)
-
-
-    def deletion(self, indexes):
-        """"""
-        sequence = self.sequence
-        for index in indexes:
-            sequence = sequence[0:index] + sequence[index+1:]
-        return Seq(sequence, normalized=True)
-
-
-    def delevent(self, events):
-        """"""
-        sequence = self.sequence
-        for index, length in events:
-            sequence = sequence[0:index] + sequence[index+length+1:]
-        return Seq(sequence, normalized=True)
-
-
-    def find(self, subseq):
-        """ Gives the index in this sequence at which the subseq starts, or -1 if no match. """
-        return self.sequence.find(str(subseq))
-
 
     def find_primer(self, primerseq, min_overlap=10):
         """ Identifies the index in this sequence at which the last min_overlap bases of the primer match. Returns None if no match found. """
@@ -118,68 +85,30 @@ class Seq():
             return ix + min_overlap
         else:
             return None
-
-
-    def find_primers(self, primers_list, min_overlap=10):
-        """  """
-        for primerseq in primers_list:
-            if (index_start := self.find_primer(primerseq, min_overlap=min_overlap)):
-                break
-        if index_start:
-            return index_start, primerseq
+        
+    def rfind_primer(self, primerseq, min_overlap=10):
+        """ Identifies the index in this sequence at which the last min_overlap bases of the primer match. Returns None if no match found. """
+        if len(primerseq) < min_overlap:
+            logger.warning(f"The used primer {primerseq} is shorter than the minimum primer length.")
+            return None
+        subseq = str(primerseq)[:min_overlap]
+        ix = self.sequence.rfind(subseq)
+        if ix >= 0:
+            return ix
         else:
-            return None, None
+            return None
 
 
     def reverse_complement(self):
         """Return the reverse complement as a new sequence."""
-        seq_rc = ''.join(tools.BASE_COMPLEMENT[c] for c in reversed(self.sequence))
-        return Seq(seq_rc, normalized=True)
+        return Seq(self.sequence.translate(tab)[::-1])
 
 
     def reverse(self):
         """Return the reverse as a new sequence."""
-        seq_r = self.sequence[::-1]
-        return Seq(seq_r, normalized=True)
+        return Seq(self.sequence[::-1])
 
 
     def complement(self):
         """Return the complement as a new sequence."""
-        seq_c = ''.join(tools.BASE_COMPLEMENT[c] for c in self.sequence)
-        return Seq(seq_c, normalized=True)
-
-
-    def base_composition(self, list=False, U2T=False):
-        """  """
-        if U2T:
-            if list:
-                result = np.array([self.sequence.count(base) for base in tools.BASES])
-                result[tools.BASE2IDX["T"]] += self.sequence.count("U")
-                return result
-            else:
-                result = {base: self.sequence.count(base) for base in tools.BASES}
-                result["T"] += self.sequence.count("U")
-                return result
-
-        else:
-            if list:
-                return np.array([self.sequence.count(base) for base in tools.BASES_WITH_U])
-            else:
-                return {base: self.sequence.count(base) for base in tools.BASES_WITH_U}
-
-
-    def base_indexes(self, list=False, U2T=False):
-        """  """
-        if U2T:
-            indexes = [[] for _ in range(4)]
-            for i, base in enumerate(self.sequence):
-                indexes[tools.BASE2IDX_U2T[base]].append(i)
-            if not list: return {base: indexes[i] for i, base in enumerate(tools.BASES)}
-            return indexes
-
-        else:
-            indexes = [[] for _ in range(5)]
-            for i, base in enumerate(self.sequence):
-                indexes[tools.BASE2IDX[base]].append(i)
-            if not list: return {base: indexes[i] for i, base in enumerate(tools.BASES_WITH_U)}
-            return indexes
+        return Seq(self.sequence.translate(tab))

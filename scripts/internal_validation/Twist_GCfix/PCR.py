@@ -6,8 +6,6 @@ import sys
 TARGET_FOLDER = sys.argv[1]
 
 dt4dds.config.show_progressbars = False
-dt4dds.config.enable_multiprocessing = False
-dt4dds.config.n_processes = 4
 dt4dds.default_logging()
 
 

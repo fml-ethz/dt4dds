@@ -3,17 +3,18 @@ DEFAULT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 from .settings import AgingSettings, SynthesisSettings, PCRSettings, SequencingSettings, PropertiesSettings
 
-
+# 
+# Sequencing
+# 
 def iSeq100(**kwargs):
     settings = SequencingSettings.from_yaml(os.path.join(DEFAULT_DIR, 'iseq100.yaml'))
     settings.update(**kwargs)
     return settings
 
-def PCR(**kwargs):
-    settings = PCRSettings.from_yaml(os.path.join(DEFAULT_DIR, 'pcr_taq.yaml'))
-    settings.update(**kwargs)
-    return settings
 
+# 
+# PCR
+# 
 def PCR_Taq(**kwargs):
     settings = PCRSettings.from_yaml(os.path.join(DEFAULT_DIR, 'pcr_taq.yaml'))
     settings.update(**kwargs)
@@ -34,6 +35,10 @@ def PCR_Exo(**kwargs):
     settings.update(**kwargs)
     return settings
 
+
+# 
+# Synthesis
+# 
 def ArraySynthesis_CustomArray(**kwargs):
     settings = SynthesisSettings.from_yaml(os.path.join(DEFAULT_DIR, 'array_synthesis_customarray.yaml'))
     settings.update(**kwargs)
@@ -54,11 +59,24 @@ def ArraySynthesis_Twist(**kwargs):
     settings.update(**kwargs)
     return settings
 
-def Aging(**kwargs):
-    settings = AgingSettings.from_yaml(os.path.join(DEFAULT_DIR, 'fixed_aging.yaml'))
+def ArraySynthesis_Photolithographic(**kwargs):
+    settings = SynthesisSettings.from_yaml(os.path.join(DEFAULT_DIR, 'array_synthesis_photolithographic.yaml'))
     settings.update(**kwargs)
     return settings
 
+
+# 
+# Aging
+# 
+def Aging(**kwargs):
+    settings = AgingSettings.from_yaml(os.path.join(DEFAULT_DIR, 'aging.yaml'))
+    settings.update(**kwargs)
+    return settings
+
+
+# 
+# Sequence properties
+# 
 def SequenceProperties(**kwargs):
     settings = PropertiesSettings.from_yaml(os.path.join(DEFAULT_DIR, 'properties.yaml'))
     settings.update(**kwargs)

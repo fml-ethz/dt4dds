@@ -68,12 +68,6 @@ class SeqPool():
     #
 
     @classmethod
-    def combine(cls, *other_pools):
-        pool = cls()
-        pool.combine_with(*other_pools)
-        return pool
-
-    @classmethod
     def from_csv(cls, filepath, sep=',', header=None):
         df_dict = pd.read_csv(filepath, sep=sep, header=header).to_dict(orient='list')
         instance = cls(pool_data = dict(zip(df_dict[0], df_dict[1])))
@@ -82,9 +76,8 @@ class SeqPool():
 
 
     #
-    # Convenience functions
+    # Iterators
     #
-
 
     def sequences(self):
         """Generator for the sequences contained in this SeqPool, each converted to a Seq object."""
@@ -97,6 +90,59 @@ class SeqPool():
         for count in self._seqdict.values():
             yield count
 
+    # 
+    # Properties
+    # 
+
+    @property
+    def n_sequences(self):
+        """ Number of unique sequences in this pool. """
+        return len(self._seqdict.keys())
+
+    @property
+    def n_oligos(self):
+        """ Total number of oligos in this pool. """
+        return sum(self._seqdict.values())
+
+    @property
+    def n_nucleotides(self):
+        """ Total number of nucleotides in this pool. """
+        lengths = np.array([len(s) for s in self.sequences()], dtype=float)
+        counts = np.array([c for c in self.counts()], dtype=float)
+
+        return int(np.sum(lengths*counts, dtype=float))
+
+    @property
+    def mass_concentration(self):
+        """ Returns the DNA concentration in ng/uL. """
+        if self.volume is None:
+            raise AttributeError("SeqPool does not have a specified volume, cannot calculate concentration.")
+        return self.mass/self.volume
+
+    @property
+    def molar_concentration(self):
+        """ Returns the DNA concentration in nM. """
+        if self.volume is None:
+            raise AttributeError("SeqPool does not have a specified volume, cannot calculate concentration.")
+        return 1e9*self.n_oligos/(tools.NA*self.volume)
+
+    @property
+    def mass(self):
+        """ Returns the total DNA weight in nanogram. Formulas as used by NEBioCalculator."""
+        if self.is_doublestranded:
+            return (1e9/tools.NA) * (self.n_nucleotides * 617.96 + self.n_oligos * 36.04)
+        else:
+            return (1e9/tools.NA) * (self.n_nucleotides * 308.97 + self.n_oligos * 18.02)
+
+    @property
+    def moles(self):
+        """"""
+        return 1e9*self.n_oligos/tools.NA
+
+
+    #
+    # Pool operations
+    #
 
     def copy(self):
         """Returns a deep copy of this SeqPool."""
@@ -117,68 +163,6 @@ class SeqPool():
         return self
 
 
-    def combine_with2(self, other_pools):
-        """Adds all sequences from the other SeqPool(s) to this SeqPool."""
-        for other_pool in other_pools:
-            self.add_sequences(other_pool.sequences(), other_pool.counts())
-            if self.volume is not None and other_pool.volume is not None:
-                self.volume += other_pool.volume
-        return self
-
-
-    @property
-    def n_sequences(self):
-        """ Number of unique sequences in this pool. """
-        return len(self._seqdict.keys())
-
-    @property
-    def n_oligos(self):
-        """ Total number of oligos in this pool. """
-        return sum(self._seqdict.values())
-
-
-    @property
-    def n_nucleotides(self):
-        """ Total number of nucleotides in this pool. """
-        lengths = np.array([len(s) for s in self.sequences()], dtype=float)
-        counts = np.array([c for c in self.counts()], dtype=float)
-
-        return int(np.sum(lengths*counts, dtype=float))
-
-    
-    @property
-    def mass_concentration(self):
-        """ Returns the DNA concentration in ng/uL. """
-        if self.volume is None:
-            raise AttributeError("SeqPool does not have a specified volume, cannot calculate concentration.")
-        return self.mass/self.volume
-
-    @property
-    def molar_concentration(self):
-        """ Returns the DNA concentration in nM. """
-        if self.volume is None:
-            raise AttributeError("SeqPool does not have a specified volume, cannot calculate concentration.")
-        return 1e9*self.n_oligos/(tools.NA*self.volume)
-
-
-    @property
-    def mass(self):
-        """ Returns the total DNA weight in nanogram. Formulas as used by NEBioCalculator."""
-        if self.is_doublestranded:
-            return (1e9/tools.NA) * (self.n_nucleotides * 617.96 + self.n_oligos * 36.04)
-        else:
-            return (1e9/tools.NA) * (self.n_nucleotides * 308.97 + self.n_oligos * 18.02)
-
-    @property
-    def moles(self):
-        """"""
-        return 1e9*self.n_oligos/tools.NA
-
-
-    #
-    # Cropping and Filtering
-    #
-
     def simplify(self, fixed_coverage=None):
 
         if not fixed_coverage:
@@ -187,32 +171,16 @@ class SeqPool():
         oligo_factor = self.n_oligos//fixed_coverage
 
         if oligo_factor > 1:
-            logger.info(f"Pool simplified by a factor of {oligo_factor}")
+            logger.info(f"Pool has {self.n_sequences} seqs and {self.n_oligos} oligos, will be simplified by a factor of {oligo_factor}")
             self._seqdict = self.sample_by_factor(1/oligo_factor, accurate=True)._seqdict
             self._seqdict.update((seq, int(count*oligo_factor)) for seq, count in self._seqdict.items())
-
-
-    def split_by_threshold(self, threshold):
-        """"""
-        seqdict_in = {sequence: value for sequence, value in self._seqdict.items() if value >= threshold}
-        pool_in = SeqPool(pool_data=seqdict_in, is_doublestranded=self.is_doublestranded)
-
-        pool_out = self.copy()
-        pool_out.remove_sequences(pool_in.sequences())
-        
-        return pool_in, pool_out
-
-
-    def filter_by_length(self, l_min, l_max, inplace=False):
-        """"""
-        seqdict = {seq: value for seq, value in self._seqdict.items() if (len(seq) >= l_min) and (len(seq) <= l_max)}
-        if inplace: 
-            self._seqdict = seqdict
-            return None
         else:
-            return SeqPool(pool_data=seqdict, is_doublestranded=self.is_doublestranded)
+            logger.info(f"Pool has {self.n_sequences} seqs and {self.n_oligos} oligos, no simplification necessary.")
 
 
+    # 
+    # Sampling 
+    # 
 
     def sample_by_factor(self, dil_factor, remove_sampled_oligos=False, accurate=False):
 
@@ -312,30 +280,6 @@ class SeqPool():
 
 
     #
-    # Splitting
-    #
-    
-    def split(self, n, sequentially=False):
-
-        n = int(n)
-        
-        if sequentially:
-            it = iter(self._seqdict.items())
-            size = round(self.n_sequences/n)
-    
-            pools = [SeqPool(pool_data=dict(itertools.islice(it, size))) for _ in range(n-1)]
-            pools.append(SeqPool(pool_data=dict(it)))
-
-        else:
-            pools = []
-            for i in range(n):
-                it = iter(self._seqdict.items())
-                pools.append(SeqPool(pool_data=dict(itertools.islice(it, i, self.n_sequences, n)), is_doublestranded=self.is_doublestranded))
-
-        return pools
-
-
-    #
     # Sequence manipulation
     #
 
@@ -387,18 +331,6 @@ class SeqPool():
         for seq in sequences:
             self._seqdict[seq] = self._seqdict.get(seq, 0) + count
         
-
-
-    #
-    # Value manipulation
-    #
-
-    def rebase_values(self, total=1.0):
-        """Rebases each sequence's value so that the sum of all sequences' values are equal to the given total."""
-        factor = total/sum(self._seqdict.values())
-        for sequence in self._seqdict.keys():
-            self._seqdict[sequence] *= factor
-
 
     #
     # Saving and exporting

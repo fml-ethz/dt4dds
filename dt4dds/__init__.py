@@ -1,4 +1,4 @@
-__VERSION__ = '1.0.0'
+__VERSION__ = '1.1.0'
 
 from .helpers import logging
 from .helpers import config
@@ -10,4 +10,3 @@ from .helpers.logging import default_logging
 
 from . import processes
 from . import properties
-from . import analysis

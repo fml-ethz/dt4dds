@@ -1,4 +1,5 @@
 from .. import datastructures
+from .. import properties
 from . import tools
 
 
@@ -59,11 +60,12 @@ def attach_primers_to_pool(pool, forward_primer, backward_primer):
 
     for sequence, count in pool:
         new_seq = "".join(map(str, [forward_primer_fw, sequence, backward_primer_rc]))
+
+        # copy the efficiency property for the reverse sequence
+        properties.AmplificationEfficiency.duplicate_efficiencies(sequence, [new_seq])
         new_pool.add_sequence(new_seq, count)
 
     return new_pool
-
-
 
 
 def create_pool_from_sequences(seqlist, n=100):

@@ -1,0 +1,18 @@
+# general parameters
+local: false
+n_reads: 2000000
+n_workers: 4
+align_subsampling: 1.0
+
+# processing parameters
+cut_adapters: false
+readmetrics: true
+breakmetrics: false
+map_local: false
+
+# categorization parameters
+min_match_similarity: 0.7
+medium_match_similarity: 0.85
+min_align_length: 20
+trim_ends: []
+trim_adapter: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT

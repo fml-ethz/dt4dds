@@ -1,210 +1,237 @@
-import gc
 import numpy as np
 import tqdm.auto
-import multiprocessing
+import time
 
 from ..helpers import errorgenerator
 from ..helpers import tools
 from .. import datastructures
 from .. import settings
 from ..helpers import config
-from .. import properties
-
-from ..helpers.step import Step
 
 import logging
 logger = logging.getLogger(__name__)
 
 
+def _breakage_model(sequence, count, cut_rate, base_probabilities={'A': 0.25, 'C': 0.25, 'G': 0.25, 'T': 0.25}):
 
-class IdealAging(Step):
+    # holds the new oligos
+    new_oligos = []
 
-    #
-    # Basic functions
-    #
+    # generate number of breaks
+    init_len = len(sequence)
+    n_breaks = tools.rng.binomial(init_len, cut_rate, size=count)
 
-    def __init__(self, settings: settings.AgingSettings = settings.AgingSettings(), **kwargs):
-        super().__init__()
-        
-        
+    # get position breakage probability for this sequence
+    base_probabilities['_'] = 0.0
+    probs = np.array([base_probabilities[base] for base in sequence if base in base_probabilities])
+    probs = probs / np.sum(probs)
+
+    # generate break positions
+    pos_list = iter(tools.rng.choice(init_len, p=probs, size=sum(n_breaks)))
+
+    # for each oligo, generate the broken oligos based on positions of the breaks
+    for n_breaks_i in n_breaks:
+
+        # short-circuit if no breaks
+        if n_breaks_i == 0:
+            new_oligos.append([sequence,])
+            continue
+
+        # get the break positions and sort them
+        break_positions = np.fromiter(pos_list, count=n_breaks_i, dtype='H')
+        break_positions.sort()
+
+        # will hold all broken oligos
+        oligos = []
+
+        # add the first broken oligo
+        if break_positions[0] != 0:
+            oligo = sequence[:break_positions[0]] + '_'
+            oligos.append(oligo)
+
+        # add the middle broken oligos
+        for i in range(1, n_breaks_i):
+            start = break_positions[i-1] + 1 # +1 to skip the previous break
+            end = break_positions[i]
+            oligo = sequence[start:end] + '_'
+            oligos.append(oligo)
+
+        # add the last broken oligo
+        if break_positions[-1] != init_len-1:
+            oligo = sequence[break_positions[-1]+1:]
+            oligos.append(oligo)
+
+        # add the oligos to the list
+        new_oligos.append(oligos)
+
+    return new_oligos
+
+
+
+
+class IdealAging():
+
+
+    def __init__(self, settings: settings.AgingSettings = settings.AgingSettings(), n_halflives=None, intact_ratio=None, decayed_ratio=None, **kwargs):
+
         self.settings = settings
         self.settings.update(**kwargs)
 
+        # calculate the decay rates
+        if n_halflives is not None:
+            logger.info("Using n_halflives to calculate decay progress.")
+            self.n_halflives = n_halflives
+        elif intact_ratio is not None:
+            logger.info("Using intact_ratio to calculate decay progress.")
+            self.n_halflives = -np.log2(intact_ratio)
+        elif decayed_ratio is not None:
+            logger.info("Using decayed_ratio to calculate decay progress.")
+            self.n_halflives = -np.log2(1-decayed_ratio)
+        else:
+            raise ValueError("Must specify either n_halflives, intact_ratio, or decayed_ratio.")
 
 
     def __repr__(self):
-        return f"{type(self).__name__}()"
+        return f"{type(self).__name__}(n_halflives={self.n_halflives:.2f}, intact_ratio={self.intact_ratio:.4f}, decayed_ratio={self.decayed_ratio:.4f})"
 
+
+    @property
+    def intact_ratio(self):
+        return 2**(-self.n_halflives)
+    
+    @property
+    def decayed_ratio(self):
+        return 1 - self.intact_ratio
 
 
     #
-    # Internal processing functions
+    # Public functions
     #
 
     def process(self, pool: datastructures.SeqPool):
         """ Main entry point. Performs decay. """
 
         # set up
+        t = time.time()
+        logger.info(f"Starting decay with {self}.")
         pool.simplify()
-        self._run_pre_process_hooks(pool)
 
-        if self.settings.method == 'fixed':
-            decayed_pool = self._fixeddecay(pool)
-        elif self.settings.method == 'arrhenius':
-            decayed_pool = self._arrheniusdecay(pool)
-        else:
-            logger.exception(f"Unknown decay method {self.settings.method}.") 
+        # introduce errors and decay
+        error_pool = self._errors(pool)
+        decayed_pool = self._decay(error_pool)
 
-        aged_pool = self._getagedpool(decayed_pool)
-
-        # finish up
-        self._run_post_process_hooks(aged_pool)  
-        return aged_pool
-
-
-
-    def _fixeddecay(self, pool):
-
-        assert (self.settings.fixed_decay_ratio >= 0.0) and (self.settings.fixed_decay_ratio <= 1.0)
-        intact_ratio = 1.0 - self.settings.fixed_decay_ratio
-        self.n_halflives = -np.log2(intact_ratio)
-        return pool.sample_by_factor(intact_ratio, remove_sampled_oligos=False)
-
-
-    def _arrheniusdecay(self, pool):
-
-        # fitted parameters for polymer storage
-        A = 4.96e20
-        b = 0.074
-
-        # time in years to time in seconds
-        time_s = self.settings.arrhenius_t*365*24*60*60
-
-        # determine rate constant in 1/s
-        # saturation vapor pressure of water (https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185)
-        psat = 10.0**(4.65-(1435/((self.settings.arrhenius_T+273)-64.8)))
-        csat = psat/(8.3145*(self.settings.arrhenius_T+273))
-        self.k0 = A*csat*np.exp(-self.settings.arrhenius_Ea/(8.3145*(self.settings.arrhenius_T+273)))*(self.settings.arrhenius_RH+b)
-
-    
-        counts = np.array(list(pool.counts()))
-        lengths = np.array([len(s) for s in pool.sequences()])
-
-        # for each sequence, decay depends on sequence length
-        intact_ratios = np.exp(-self.k0*lengths*time_s)
-        intact_counts = tools.rng.binomial(counts, intact_ratios)
-        self.n_halflives = -np.log2(np.sum(intact_counts)/np.sum(counts))
-
-        # build new pool
-        decayed_pool = datastructures.SeqPool(is_doublestranded=pool.is_doublestranded)
-        decayed_pool.add_sequences(pool.sequences(), intact_counts)
-
+        logger.info(f"Aging finished in {time.time()-t:.2f}s.")
         return decayed_pool
 
 
-    def _getagedpool(self, pool):
+    # 
+    # Decay-related
+    # 
+
+    def _decay(self, pool):
+        if not self.settings.breakage_enabled:
+            return pool.sample_by_factor(self.intact_ratio, remove_sampled_oligos=False)
+        else:
+            return self._breakage(pool)
+        
+
+    def _errors(self, pool):
         return pool
+
+
+    # 
+    # Breakage-related
+    # 
+
+    def _breakage(self, pool):
+        """ Breaks oligos into pieces. """
+
+        # calculate cut rate
+        if self.settings.breakage_rate_override:
+            cut_rate = self.settings.breakage_rate_override
+        else:
+            cut_rate = 1 - (self.intact_ratio)**(1/self.settings.breakage_ref_length)
+        logger.info(f"Breakage cut rate: {cut_rate:.4f} per nt")
+        
+        # break oligos to form a new pool
+        broken_pool = datastructures.SeqPool(is_doublestranded=False)
+        for sequence, count in tqdm.tqdm(pool, total=pool.n_sequences, desc="Breaking", unit="sequences", disable=not config.show_progressbars, leave=False):
+
+            # add the original sequence
+            self._breakage_build_pool(broken_pool, sequence, count, cut_rate)
+
+            # add the reverse complement if the pool is double-stranded
+            if pool.is_doublestranded:
+                self._breakage_build_pool(broken_pool, sequence.reverse_complement(), count, cut_rate)
+
+        return broken_pool
+
+
+    def _breakage_build_pool(self, broken_pool, sequence, count, cut_rate):
+    
+        if count > self.settings.breakage_coverage_threshold:
+            count_factor = count // self.settings.breakage_coverage_threshold
+            overflow = count % self.settings.breakage_coverage_threshold
+            count = self.settings.breakage_coverage_threshold
+        else:
+            count_factor = 1
+            overflow = 0
+
+        # break oligos
+        new_oligos = _breakage_model(str(sequence), count, cut_rate, base_probabilities=self.settings.breakage_base_probabilities)
+        for broken_oligos in new_oligos:
+            broken_pool.add_single_sequences(broken_oligos, count=count_factor)
+        
+        # add overflow
+        if overflow > 0:
+            ixs = tools.rng.integers(len(new_oligos), size=overflow)
+            for ix in ixs:
+                broken_pool.add_single_sequences(new_oligos[ix], count=1)
+
 
 
 
 
 class Aging(IdealAging):
 
-
-    def __init__(self, settings: settings.AgingSettings = settings.AgingSettings(), **kwargs):
-
-        super().__init__(settings, **kwargs)
-
-
-
     #
     # Overwrite ideal functions
     #
 
-    def _getagedpool(self, sample_pool):
+    def _errors(self, sample_pool):
         """  """
-
         # initiate the error generators with their settings
-        self.mutation_functions = []
-        if self.settings.substitution_rate > 0:
-            self.mutation_functions.append(errorgenerator.Substitutions(
-                self.settings.substitution_rate*self.n_halflives, 
-                self.settings.substitution_bias
-            ))
-        if self.settings.deletion_rate > 0:
-            self.mutation_functions.append(errorgenerator.Deletions(
-                self.settings.deletion_rate*self.n_halflives, 
-                self.settings.deletion_bias, 
-            ))
-        if self.settings.insertion_rate > 0:
-            self.mutation_functions.append(errorgenerator.Insertions(
-                self.settings.insertion_rate*self.n_halflives, 
-                self.settings.insertion_bias
-            ))
+        error_generators = []
+        error_generators.append(errorgenerator.Substitutions(
+            mean_rate=self.settings.substitution_rate*self.n_halflives, 
+            bias=self.settings.substitution_bias,
+            read_bias=self.settings.substitution_read_bias,
+            repeat_bias=self.settings.substitution_repeat_bias,
+            length_bias=self.settings.substitution_length_bias,
+            error_generation_error_coverage=self.settings.error_generation_error_coverage,
+            error_generation_max_coverage_threshold=self.settings.error_generation_max_coverage_threshold,
+        ))
+        error_generators.append(errorgenerator.Deletions(
+            mean_rate=self.settings.deletion_rate*self.n_halflives, 
+            bias=self.settings.deletion_bias, 
+            read_bias=self.settings.deletion_read_bias,
+            repeat_bias=self.settings.deletion_repeat_bias,
+            length_bias=self.settings.deletion_length_bias,
+            error_generation_error_coverage=self.settings.error_generation_error_coverage,
+            error_generation_max_coverage_threshold=self.settings.error_generation_max_coverage_threshold,
+        ))
+        error_generators.append(errorgenerator.Insertions(
+            mean_rate=self.settings.insertion_rate*self.n_halflives, 
+            bias=self.settings.insertion_bias,
+            read_bias=self.settings.insertion_read_bias,
+            repeat_bias=self.settings.insertion_repeat_bias,
+            length_bias=self.settings.insertion_length_bias,
+            error_generation_error_coverage=self.settings.error_generation_error_coverage,
+            error_generation_max_coverage_threshold=self.settings.error_generation_max_coverage_threshold,
+        ))
 
-            
-        sampled_pool = datastructures.SeqPool()
-        
-        if config.enable_multiprocessing:
-            
-            with multiprocessing.Pool(processes=config.n_processes) as pool:
-                sample_pools = pool.imap(
-                    self._getagedpool_single, 
-                    zip(sample_pool.sequences(), sample_pool.counts()),
-                    chunksize=min(500, sample_pool.n_sequences//config.n_processes)
-                )
+        # apply the error generators
+        for error_gen in error_generators:
+            sample_pool = error_gen.mutate_pool(sample_pool)
 
-                pools_iterator = tqdm.auto.tqdm(
-                    sample_pools, 
-                    desc="Mutating", 
-                    unit="sequences",
-                    total=sample_pool.n_sequences,
-                    disable=not config.show_progressbars,
-                    leave=False,
-                )
-
-                # add new sequences to pool
-                for orig_seq, pool in zip(sample_pool.sequences(), pools_iterator):
-                    sampled_pool.add_sequences(pool.sequences(), pool.counts())
-                    properties.AmplificationEfficiency.duplicate_efficiencies(orig_seq, pool.sequences())
-            
-        else:
-
-            sample_pools = map(self._getagedpool_single, zip(sample_pool.sequences(), sample_pool.counts()))
-
-            pools_iterator = tqdm.auto.tqdm(
-                    sample_pools, 
-                    desc="Mutating", 
-                    unit="sequences",
-                    total=sample_pool.n_sequences,
-                    disable=not config.show_progressbars,
-                    leave=False,
-                )
-
-            # add new sequences to pool
-            for orig_seq, pool in zip(sample_pool.sequences(), pools_iterator):
-                sampled_pool.add_sequences(pool.sequences(), pool.counts())
-                properties.AmplificationEfficiency.duplicate_efficiencies(orig_seq, pool.sequences())
-
-        
-
-        
-
-        return sampled_pool
-
-
-
-    def _getagedpool_single(self, arguments):
-        """  """
-
-        sequence, count = arguments
-        sample_pool = datastructures.SeqPool(pool_data = {sequence: count})
-
-        for mutation in self.mutation_functions:
-            new_pool = datastructures.SeqPool()
-
-            for sequence, count in sample_pool:
-                new_pool.combine_with(mutation(sequence, count))
-            sample_pool = new_pool
-        
         return sample_pool

@@ -1,7 +1,6 @@
 [build-system]
-requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=60", "setuptools-scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
-
 
 
 [project]
@@ -18,30 +17,33 @@ classifiers = [
     "Programming Language :: Python",
     "Topic :: Scientific/Engineering :: Bio-Informatics"
 ]
-dynamic = ["version"]
-dependencies = [
-  'numpy',
-  'scipy',
-  'pandas',
-  'edlib',
-  'biopython',
-  'numba',
-  'plotly',
-  'PyYAML',
-  'rapidfuzz',
-  'ruamel.yaml',
-  'tqdm',
-]
+dynamic = ["version", "dependencies"]
+
+
+[project.scripts]
+dt4dds-analysis = "dt4dds.bin.analysis:single"
+dt4dds-batchanalysis = "dt4dds.bin.analysis:batch"
+dt4dds-clusteranalysis = "dt4dds.bin.analysis:cluster_single"
+dt4dds-clusterbatchanalysis = "dt4dds.bin.analysis:cluster_batch"
+dt4dds-scenario = "dt4dds.bin.scenario:main"
+dt4dds-challenge = "dt4dds.bin.challenge:main"
+dt4dds-utils = "dt4dds.bin.utils:main"
 
 
 [tool.setuptools]
+py-modules = ['dt4dds']
 packages = ['dt4dds']
 
 
 [tool.setuptools.dynamic]
 version = {attr = "dt4dds.__VERSION__"}
+dependencies = {file = ["requirements.txt"]}
 
 
 [project.urls]
 Homepage = "https://dt4dds.ethz.ch"
 Repository = "https://github.com/fml-ethz/dt4dds"
+
+
+[tool.setuptools_scm]
+# can be empty if no extra settings are needed, presence enables setuptools_scm
