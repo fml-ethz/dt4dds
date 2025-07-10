@@ -3,6 +3,7 @@
 
 - [Overview](#overview)
 - [Web-based Tool](#web-based-tool)
+- [Docker](#docker)
 - [System Requirements](#system-requirements)
 - [Installation Guide](#installation-guide)
 - [License](#license)
@@ -13,7 +14,7 @@
 
 > Gimpel, A.L., Stark, W.J., Heckel, R., Grass R.N. A digital twin for DNA data storage based on comprehensive quantification of errors and biases. Nat Commun 14, 6026 (2023). https://doi.org/10.1038/s41467-023-41729-1
 
-> Gimpel, A.L., Stark, W.J., Heckel, R., Grass R.N. Challenges for error-correction coding in DNA data storage: photolithographic synthesis and DNA decay. bioRxiv 2024.07.04.602085 (2024). https://doi.org/10.1101/2024.07.04.602085
+> Gimpel, A.L., Stark, W.J., Heckel, R., Grass R.N. Challenges for error-correction coding in DNA data storage: photolithographic synthesis and DNA decay. Digital Discovery 2024, 3, 2497-2508 (2024). https://doi.org/10.1039/D4DD00220B
 
 The Jupyter notebooks and associated code used for generating the figures in the manuscript are found in the [dt4dds_notebooks repository](https://github.com/fml-ethz/dt4dds_notebooks).
 
@@ -21,11 +22,24 @@ The Jupyter notebooks and associated code used for generating the figures in the
 
 A C++ implementation of the Digital Twin for DNA Data Storage for two current challenges in error-correction coding for DNA - Photolithographic DNA Synthesis and DNA Decay - is available [in this GitHub repository](https://github.com/fml-ethz/dt4dds-challenges). More information is also provided in the following publication:
 
-> Gimpel, A.L., Stark, W.J., Heckel, R., Grass R.N. Challenges for error-correction coding in DNA data storage: photolithographic synthesis and DNA decay. bioRxiv 2024.07.04.602085 (2024). https://doi.org/10.1101/2024.07.04.602085
+> Gimpel, A.L., Stark, W.J., Heckel, R., Grass R.N. Challenges for error-correction coding in DNA data storage: photolithographic synthesis and DNA decay. Digital Discovery 2024, 3, 2497-2508 (2024). https://doi.org/10.1039/D4DD00220B
 
 
 # Web-based Tool
 A web-based version of `dt4dds` with an easy-to-use graphical user interface and the most common workflows is available at [dt4dds.ethz.ch](https://dt4dds.ethz.ch).
+
+
+# Docker
+A Docker image built from the [Dockerfile](/Dockerfile) is available from `ghcr.io/fml-ethz/dt4dds` and `agimpel/dt4dds` on Docker Hub. It is recommended to mount a local folder to the container in order to supply and retrieve data. Thus, in the following, it is assumed that the local folder `./containerdata` exists and is used for this purpose. 
+
+To run an interactive session, execute
+```bash
+docker run --mount type=bind,src=./containerdata,dst=/data -it ghcr.io/fml-ethz/dt4dds bash
+# or
+docker run --mount type=bind,src=./containerdata,dst=/data -it agimpel/dt4dds bash
+```
+This will allow you to execute any `dt4dds`-using scripts from within the container, using data or files you supply to the local folder `./containerdata`.
+
 
 
 # System requirements
